@@ -130,11 +130,36 @@ class StateMachine:
     def _handle_select_ticket(self) -> Action:
         """Select the next pending ticket and set up a worktree."""
         tickets = self._state.get("tickets", {})
+
+        # Resume a partially-initialised ticket if one is already current.
+        # This handles crash recovery and the case where the supervisor discards the
+        # GitWorktreeCreate that process-result emits inline from _handle_ship, causing
+        # the next next-action call to see the ticket already in_progress and skip it.
+        current_key = self._state.get("current_ticket")
+        if current_key and current_key in tickets:
+            current = tickets[current_key]
+            if current.get("status") == "in_progress" and current.get("code_iteration", 1) == 0:
+                self._state["phase"] = "select_ticket"
+                self._save_state()
+                return GitWorktreeCreate(
+                    path=current["worktree"],
+                    branch=current["branch"],
+                    base=current["base"],
+                )
+
         next_key = None
         for key, info in tickets.items():
             if info.get("status") == "pending":
                 next_key = key
                 break
+
+        # Fallback: recover any in_progress ticket whose worktree was never created
+        # (code_iteration == 0 means worktree creation hasn't completed yet).
+        if next_key is None:
+            for key, info in tickets.items():
+                if info.get("status") == "in_progress" and info.get("code_iteration", 1) == 0:
+                    next_key = key
+                    break
 
         if next_key is None:
             self._state["phase"] = "epic_complete"
@@ -142,27 +167,31 @@ class StateMachine:
             return self._handle_epic_complete()
 
         ticket = tickets[next_key]
-        branch = branch_name(self._config, next_key)
-        worktree_path = os.path.join(self._config.git.worktree_root, next_key)
 
-        base = self._state.get("stack_tip", self._config.git.base_branch)
+        # Only initialise fields when selecting a fresh pending ticket.
+        # For recovery of an already-initialised in_progress ticket, keep its
+        # existing base/branch/worktree so it branches from the correct point.
+        if ticket.get("status") != "in_progress":
+            branch = branch_name(self._config, next_key)
+            worktree_path = os.path.join(self._config.git.worktree_root, next_key)
+            base = self._state.get("stack_tip", self._config.git.base_branch)
 
-        ticket["status"] = "in_progress"
-        ticket["branch"] = branch
-        ticket["base"] = base
-        ticket["worktree"] = worktree_path
-        ticket["code_iteration"] = 0
-        ticket["review_iteration"] = 1
-        ticket.setdefault("history", [])
+            ticket["status"] = "in_progress"
+            ticket["branch"] = branch
+            ticket["base"] = base
+            ticket["worktree"] = worktree_path
+            ticket["code_iteration"] = 0
+            ticket["review_iteration"] = 1
+            ticket.setdefault("history", [])
 
         self._state["current_ticket"] = next_key
         self._state["phase"] = "select_ticket"  # Will move to code_loop after worktree
         self._save_state()
 
         return GitWorktreeCreate(
-            path=worktree_path,
-            branch=branch,
-            base=base,
+            path=ticket["worktree"],
+            branch=ticket["branch"],
+            base=ticket["base"],
         )
 
     def _handle_code_loop(self) -> Action:

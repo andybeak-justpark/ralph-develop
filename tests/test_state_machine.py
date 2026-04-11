@@ -609,3 +609,165 @@ class TestBuildPrBody:
         ticket = sm.get_state()["tickets"]["DP-1"]
         body = sm._build_pr_body(ticket)
         assert "code_loop iteration 1: code_ran" in body
+
+
+class TestSelectTicketResumption:
+    """Tests for the fix that prevents in_progress/code_iteration=0 tickets from being skipped."""
+
+    def _partially_selected_state(self, tmp_path, phase="select_ticket", current="DP-1"):
+        """State where a ticket was set to in_progress but worktree never created."""
+        tickets = {
+            "DP-1": {
+                "status": "in_progress",
+                "summary": "First ticket",
+                "description": "",
+                "acceptance_criteria": "",
+                "branch": "DP-1",
+                "base": "main",
+                "worktree": "/worktrees/DP-1",
+                "code_iteration": 0,
+                "review_iteration": 1,
+                "history": [],
+            }
+        }
+        state = {
+            "epic_key": "DP-100",
+            "started_at": "2026-01-01T00:00:00Z",
+            "config_hash": "sha256:abc",
+            "memory_file": "/tmp/MEMORY.md",
+            "failed_ticket_count": 0,
+            "current_ticket": current,
+            "phase": phase,
+            "stack_tip": "main",
+            "tickets": tickets,
+        }
+        return _make_state_file(tmp_path, state)
+
+    def test_resumes_current_in_progress_ticket_with_code_iteration_zero(self, tmp_path):
+        """When next-action is called and current_ticket is in_progress/code_iteration=0,
+        re-emit GitWorktreeCreate rather than skipping to the next pending ticket."""
+        path = self._partially_selected_state(tmp_path)
+        from lib.state_machine import StateMachine
+        sm = StateMachine(_make_config(), path)
+        action = sm.next_action()
+        assert action.action == "git_worktree_create"
+        assert action.branch == "DP-1"
+        assert action.base == "main"
+
+    def test_does_not_resume_ticket_with_code_iteration_nonzero(self, tmp_path):
+        """A ticket with code_iteration > 0 is already in the code loop — don't re-create worktree."""
+        tickets = {
+            "DP-1": {
+                "status": "in_progress",
+                "summary": "First ticket",
+                "description": "",
+                "acceptance_criteria": "",
+                "branch": "DP-1",
+                "base": "main",
+                "worktree": "/worktrees/DP-1",
+                "code_iteration": 1,
+                "review_iteration": 1,
+                "history": [],
+            }
+        }
+        state = {
+            "epic_key": "DP-100",
+            "started_at": "2026-01-01T00:00:00Z",
+            "config_hash": "sha256:abc",
+            "memory_file": "/tmp/MEMORY.md",
+            "failed_ticket_count": 0,
+            "current_ticket": "DP-1",
+            "phase": "code_loop",
+            "stack_tip": "main",
+            "tickets": tickets,
+        }
+        path = _make_state_file(tmp_path, state)
+        from lib.state_machine import StateMachine
+        sm = StateMachine(_make_config(), path)
+        with patch("lib.state_machine._PROMPTS_DIR", str(tmp_path)), \
+             patch("lib.state_machine._TMP_DIR", str(tmp_path)), \
+             patch("lib.state_machine.compose_prompt", return_value="prompt"):
+            action = sm.next_action()
+        assert action.action == "run_agent"
+
+    def test_fallback_recovers_skipped_in_progress_ticket(self, tmp_path):
+        """When no pending tickets remain but some are in_progress/code_iteration=0,
+        recover them rather than declaring epic_complete."""
+        tickets = {
+            "DP-1": {
+                "status": "shipped",
+                "summary": "First ticket",
+                "description": "",
+                "acceptance_criteria": "",
+                "branch": "DP-1",
+                "base": "main",
+                "worktree": "/worktrees/DP-1",
+                "code_iteration": 2,
+                "review_iteration": 1,
+                "history": [],
+            },
+            "DP-2": {
+                "status": "in_progress",
+                "summary": "Skipped ticket",
+                "description": "",
+                "acceptance_criteria": "",
+                "branch": "DP-2",
+                "base": "DP-1",
+                "worktree": "/worktrees/DP-2",
+                "code_iteration": 0,
+                "review_iteration": 1,
+                "history": [],
+            },
+        }
+        state = {
+            "epic_key": "DP-100",
+            "started_at": "2026-01-01T00:00:00Z",
+            "config_hash": "sha256:abc",
+            "memory_file": "/tmp/MEMORY.md",
+            "failed_ticket_count": 0,
+            "current_ticket": None,
+            "phase": "select_ticket",
+            "stack_tip": "DP-1",
+            "tickets": tickets,
+        }
+        path = _make_state_file(tmp_path, state)
+        from lib.state_machine import StateMachine
+        sm = StateMachine(_make_config(), path)
+        action = sm.next_action()
+        assert action.action == "git_worktree_create"
+        assert action.branch == "DP-2"
+        # Uses the pre-existing base, not the current stack_tip
+        assert action.base == "DP-1"
+
+    def test_fallback_preserves_existing_base_not_stack_tip(self, tmp_path):
+        """Recovered tickets must branch from their original base, not the current stack_tip."""
+        tickets = {
+            "DP-1": {"status": "shipped", "summary": "A", "description": "", "acceptance_criteria": "",
+                     "branch": "DP-1", "base": "main", "worktree": "/w/DP-1", "code_iteration": 2,
+                     "review_iteration": 1, "history": []},
+            "DP-2": {"status": "shipped", "summary": "B", "description": "", "acceptance_criteria": "",
+                     "branch": "DP-2", "base": "DP-1", "worktree": "/w/DP-2", "code_iteration": 2,
+                     "review_iteration": 1, "history": []},
+            "DP-3": {"status": "in_progress", "summary": "C (skipped sibling of DP-2)",
+                     "description": "", "acceptance_criteria": "",
+                     "branch": "DP-3", "base": "DP-1",  # should branch from DP-1, not DP-2
+                     "worktree": "/w/DP-3", "code_iteration": 0, "review_iteration": 1, "history": []},
+        }
+        state = {
+            "epic_key": "DP-100",
+            "started_at": "2026-01-01T00:00:00Z",
+            "config_hash": "sha256:abc",
+            "memory_file": "/tmp/MEMORY.md",
+            "failed_ticket_count": 0,
+            "current_ticket": None,
+            "phase": "select_ticket",
+            "stack_tip": "DP-2",  # stack advanced past DP-3's intended base
+            "tickets": tickets,
+        }
+        path = _make_state_file(tmp_path, state)
+        from lib.state_machine import StateMachine
+        sm = StateMachine(_make_config(), path)
+        action = sm.next_action()
+        assert action.action == "git_worktree_create"
+        assert action.branch == "DP-3"
+        assert action.base == "DP-1"  # must NOT be "DP-2" (stack_tip)
