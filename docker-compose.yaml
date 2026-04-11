@@ -1,0 +1,22 @@
+services:
+  epic-runner:
+    build: .
+    image: epic-runner:latest
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./state.json:/app/state.json:rw
+      - ./MEMORY.md:/app/MEMORY.md:rw
+      - ./logs:/app/logs:rw
+      - ./prompts:/app/prompts:ro
+      - /tmp/epic-runner-tmp:/app/tmp:rw
+    environment:
+      - JIRA_API_TOKEN
+
+  test:
+    build: .
+    image: epic-runner:latest
+    entrypoint: ["sh", "-c"]
+    command: ["pip install --quiet pytest && python3 -m pytest tests/ -v"]
+    volumes:
+      - ./tests:/app/tests:ro
+      - ./lib:/app/lib:ro

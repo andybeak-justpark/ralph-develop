@@ -1,0 +1,34 @@
+# Runtime state
+state.json
+pr-review-state.json
+MEMORY.md
+
+# Logs (keep directory structure)
+logs/*
+!logs/.gitkeep
+!logs/pr-review/
+logs/pr-review/*
+!logs/pr-review/.gitkeep
+
+# Claude Code local settings
+.claude/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Environment
+.env
+.env.*
+*.env
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

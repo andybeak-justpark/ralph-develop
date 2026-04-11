@@ -1,0 +1,43 @@
+# Epic Runner configuration
+# Copy this file and customise for your project.
+
+# Jira
+jira:
+  base_url: "https://justpark.atlassian.net"
+  email: "andy.beak@justpark.com"
+  api_token_env: "JIRA_API_TOKEN"        # Name of env var holding the token
+  todo_status: "In Progress"               # Status name for unstarted tickets
+  in_review_status: "In Review"           # Status name to transition to after PR
+  acceptance_criteria_field: null         # Jira custom field ID, e.g. "customfield_10100"
+
+# Git
+git:
+  repo_dir: ""                            # Absolute path to the target git repository.
+                                          # Can also be passed as --repo on the command line,
+                                          # or the script will use the current directory.
+  base_branch: "master"
+  worktree_root: "/home/andy/projects/worktrees"             # Where worktrees are created (absolute path on host)
+  branch_pattern: "{ticket_key}"          # Can include {summary_slug}
+  commit_message_pattern: "{ticket_key}: {ticket_summary}"
+  git_crypt_key: "~/gc-keys/go.key"        # Absolute path to git-crypt key file, e.g. ~/gc-keys/repo.key
+                                           # Required if the repo uses git-crypt.
+
+# Agent
+agent:
+  claude_command: "claude"                # Path or name of Claude CLI
+  claude_args:
+    - "--print"
+    - "--dangerously-skip-permissions"
+    - "--model"
+    - "claude-sonnet-4-6"
+
+# Limits
+limits:
+  max_code_iterations: 5
+  max_review_iterations: 5
+  max_ticket_failures: 2
+
+# Supervisor
+supervisor:
+  max_crashes: 5
+  cooldown_seconds: 10
