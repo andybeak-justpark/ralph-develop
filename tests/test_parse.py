@@ -62,15 +62,36 @@ def test_validation_no_signal_fallback_reason():
 
 def test_review_exact_match():
     from lib.parse import parse_review_output
-    r = parse_review_output("All done.\nREVIEW COMPLETE\n")
+    r = parse_review_output("All done.\n-=REVIEW COMPLETE=-\n")
     assert r.passed is True
     assert r.signal_found is True
 
 
-def test_review_relaxed_match():
+def test_review_exact_match_with_whitespace():
     from lib.parse import parse_review_output
-    r = parse_review_output("review complete — no remaining issues")
+    r = parse_review_output("  -=REVIEW COMPLETE=-  ")
     assert r.passed is True
+
+
+def test_review_old_signal_no_longer_matches():
+    # Plain "REVIEW COMPLETE" without the distinctive punctuation must not pass.
+    from lib.parse import parse_review_output
+    r = parse_review_output("REVIEW COMPLETE")
+    assert r.passed is False
+
+
+def test_review_partial_punctuation_no_match():
+    # Only one side of the punctuation must not match.
+    from lib.parse import parse_review_output
+    r = parse_review_output("-=REVIEW COMPLETE")
+    assert r.passed is False
+
+
+def test_review_embedded_in_prose_no_match():
+    # Signal embedded in a sentence must not trigger a pass.
+    from lib.parse import parse_review_output
+    r = parse_review_output("The review is complete and the code looks good.")
+    assert r.passed is False
 
 
 def test_review_absent_signal():
@@ -94,15 +115,3 @@ def test_review_no_issues_signal_absent():
     r = parse_review_output("I made some fixes but haven't finished yet.")
     assert r.passed is False
     assert "log file" in r.failure_reason
-
-
-def test_review_markdown_wrapped_signal():
-    from lib.parse import parse_review_output
-    r = parse_review_output("## Summary\n\n**REVIEW COMPLETE**\n")
-    assert r.passed is True
-
-
-def test_review_signal_in_backticks():
-    from lib.parse import parse_review_output
-    r = parse_review_output("`REVIEW COMPLETE`")
-    assert r.passed is True

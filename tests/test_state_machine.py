@@ -169,7 +169,7 @@ class TestPhaseTransitions:
         cfg = _make_config()
         sm = StateMachine(cfg, path)
         log_file = tmp_path / "review.md"
-        log_file.write_text("Everything looks great.\nREVIEW COMPLETE\n")
+        log_file.write_text("Everything looks great.\n-=REVIEW COMPLETE=-\n")
         action = sm.process_result(log_file=str(log_file))
         assert action.action == "git_commit_and_push"
         assert sm.get_state()["phase"] == "ship"
@@ -188,7 +188,9 @@ class TestPhaseTransitions:
              patch("lib.state_machine.compose_prompt", return_value="prompt"):
             action = sm.process_result(log_file=str(log_file))
         assert action.action == "run_agent"
-        assert sm.get_state()["phase"] == "review_loop"
+        # After review issues found, phase goes to validate (re-run tests after
+        # reviewer's fixes) before looping back to review_loop.
+        assert sm.get_state()["phase"] == "validate"
         assert sm.get_state()["tickets"]["DP-1"]["review_iteration"] == 2
 
 

@@ -12,7 +12,7 @@ jira:
 
 # Git
 git:
-  repo_dir: ""                            # Absolute path to the target git repository.
+  repo_dir: "/home/andy/projects/go"      # Absolute path to the target git repository.
                                           # Can also be passed as --repo on the command line,
                                           # or the script will use the current directory.
   base_branch: "master"

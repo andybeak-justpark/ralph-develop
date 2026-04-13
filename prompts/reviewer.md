@@ -175,5 +175,5 @@ This is review iteration **{{ITERATION}}** of **{{MAX_ITERATIONS}}** allowed.
 
 After the review and fixes, decide whether further iterations are needed:
 
-- If you found **no `critical`, `high`, or `medium` issues** across any criterion, output the exact string `REVIEW COMPLETE` on its own line. This signals that the code is in good shape and no further review passes are needed. `warning` and `suggestion` items do NOT block completion.
-- If you fixed `critical`, `high`, or `medium` issues in this pass but suspect more remain, do **not** output `REVIEW COMPLETE`. The code will be re-validated automatically, and if it passes validation the review will be run again.
+- If you found **no `critical`, `high`, or `medium` issues** across any criterion, output the exact string `-=REVIEW COMPLETE=-` on its own line. This signals that the code is in good shape and no further review passes are needed. `warning` and `suggestion` items do NOT block completion.
+- If you fixed `critical`, `high`, or `medium` issues in this pass but suspect more remain, do **not** output `-=REVIEW COMPLETE=-`. The code will be re-validated automatically, and if it passes validation the review will be run again.

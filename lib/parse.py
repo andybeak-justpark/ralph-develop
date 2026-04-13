@@ -30,6 +30,14 @@ def _find_signal(text: str, signal: str) -> bool:
     return False
 
 
+def _find_signal_exact(text: str, signal: str) -> bool:
+    """Exact standalone-line match only. Used for signals with distinctive punctuation."""
+    for line in text.splitlines():
+        if line.strip() == signal:
+            return True
+    return False
+
+
 def _extract_failure_reason(text: str) -> str:
     """Extract a short failure reason from validator output.
 
@@ -77,8 +85,8 @@ def parse_validation_output(text: str) -> ParseResult:
 
 def parse_review_output(text: str) -> ParseResult:
     """Parse Claude Code output from the reviewer agent."""
-    signal = "REVIEW COMPLETE"
-    found = _find_signal(text, signal)
+    signal = "-=REVIEW COMPLETE=-"
+    found = _find_signal_exact(text, signal)
     issue_counts = _count_severities(text)
     if found:
         return ParseResult(passed=True, signal_found=True, issue_counts=issue_counts)

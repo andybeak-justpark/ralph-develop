@@ -513,7 +513,7 @@ class StateMachine:
             "TICKET_DESCRIPTION": ticket.get("description", ""),
             "TICKET_ACCEPTANCE_CRITERIA": ticket.get("acceptance_criteria", ""),
             "BRANCH": ticket.get("branch", ""),
-            "BASE_REF": self._config.git.base_branch,
+            "BASE_REF": ticket.get("base", self._config.git.base_branch),
             "WORKTREE_PATH": ticket.get("worktree", ""),
             "MEMORY": memory,
             "MEMORY_PATH": self._state.get("memory_file", "/app/MEMORY.md"),
