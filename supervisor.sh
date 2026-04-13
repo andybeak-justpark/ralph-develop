@@ -612,6 +612,20 @@ print('Config patched with epic_key=${EPIC_KEY}', file=sys.stderr)
     CONFIG_FILE="$PATCHED_CONFIG"
 fi
 
+# Auto-fresh: when --epic KEY is given without --resume or --fresh, check if the
+# existing state is stale (different epic or already complete/failed) and reset it
+# automatically rather than immediately exiting as "complete".
+if [[ -n "$EPIC_KEY" && "$RESUME" == "false" && "$FRESH" == "false" ]]; then
+    if [[ -f "$STATE_FILE" && -s "$STATE_FILE" ]]; then
+        state_epic=$(jq -r '.epic_key // ""' "$STATE_FILE" 2>/dev/null || echo "")
+        state_phase=$(jq -r '.phase // "initialise"' "$STATE_FILE" 2>/dev/null || echo "")
+        if [[ "$state_epic" != "$EPIC_KEY" || "$state_phase" == "epic_complete" || "$state_phase" == "epic_failed" ]]; then
+            info "State is stale (epic='$state_epic', phase='$state_phase') — resetting for $EPIC_KEY."
+            FRESH=true
+        fi
+    fi
+fi
+
 if [[ "$FRESH" == "true" ]]; then
     info "Fresh run requested — clearing state and logs."
     cleanup_previous_run
