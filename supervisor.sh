@@ -251,17 +251,10 @@ handle_git_worktree_create() {
     fi
 
     if [[ "$worktree_created" == "true" ]]; then
-        if [[ -n "$GIT_CRYPT_KEY" && -f "$GIT_CRYPT_KEY" ]]; then
-            info "Unlocking git-crypt in worktree: $path"
-            # --no-checkout leaves all tracked files staged; git-crypt refuses to
-            # unlock unless the index is clean.  Reset the index (no working-tree
-            # changes yet) so git status reports clean, then unlock and check out.
-            (cd "$path" && git reset HEAD -- . &>/dev/null) || true
-            if ! (cd "$path" && git-crypt unlock "$GIT_CRYPT_KEY"); then
-                warn "git-crypt unlock failed in worktree — encrypted files may be unreadable"
-            fi
-        fi
         # Check out files now that the smudge filter is in place.
+        # git-crypt does not need to be re-unlocked per-worktree: all worktrees share
+        # the same .git directory (including .git/git-crypt/keys/), so the smudge
+        # filter configured when the main repo was unlocked at startup applies here too.
         info "Checking out files in worktree: $path"
         if ! (cd "$path" && git checkout HEAD -- .); then
             warn "git checkout in worktree failed — files may be missing"
@@ -344,19 +337,6 @@ cleanup_previous_run() {
         rm -rf "$wt"
     done <<< "$worktrees"
 
-    # Delete local branches recorded in state (skip if on that branch)
-    local branches
-    branches=$(jq -r '.tickets // {} | to_entries[].value.branch // empty' "$STATE_FILE" 2>/dev/null || true)
-    local current_branch
-    current_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)
-    while IFS= read -r branch; do
-        [[ -z "$branch" ]] && continue
-        [[ "$branch" == "$current_branch" ]] && continue
-        if git branch --list "$branch" | grep -q .; then
-            info "Deleting branch: $branch"
-            git branch -D "$branch" 2>/dev/null || true
-        fi
-    done <<< "$branches"
 }
 
 handle_cleanup_worktree() {

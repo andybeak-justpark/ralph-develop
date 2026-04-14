@@ -93,6 +93,53 @@ def cmd_retry(args) -> int:
     return 0
 
 
+def cmd_list_tickets(args) -> int:
+    from lib.config import load_config
+    from lib.jira import JiraClient
+
+    config = load_config(CONFIG_PATH)
+    jira = JiraClient(config)
+    tickets = jira.get_all_epic_tickets(args.epic)
+    print(json.dumps(tickets))
+    return 0
+
+
+def cmd_update_description(args) -> int:
+    from lib.config import load_config
+    from lib.jira import JiraClient
+
+    config = load_config(CONFIG_PATH)
+    jira = JiraClient(config)
+
+    if args.description_file:
+        with open(args.description_file) as f:
+            description = f.read().strip()
+    else:
+        description = (args.description or "").strip()
+
+    success = jira.update_description(args.ticket, description)
+    if success:
+        logger.info("Updated description for %s", args.ticket)
+        return 0
+    else:
+        logger.error("Failed to update description for %s", args.ticket)
+        return 1
+
+
+def cmd_fetch_confluence(args) -> int:
+    from lib.config import load_config
+    from lib.jira import JiraClient
+
+    config = load_config(CONFIG_PATH)
+    jira = JiraClient(config)
+    content = jira.fetch_confluence_page(args.title)
+    if content is None:
+        logger.error("Confluence page not found: %s", args.title)
+        return 1
+    print(content)
+    return 0
+
+
 def cmd_status(args) -> int:
     from lib.config import load_config
     from lib.state_machine import StateMachine
@@ -124,6 +171,17 @@ def build_parser() -> argparse.ArgumentParser:
     pr.add_argument("--reason", metavar="TEXT", help="Failure reason")
     pr.add_argument("--output", metavar="TEXT", help="Output from action (e.g. PR URL)")
 
+    lt = sub.add_parser("list-tickets", help="List all tickets in an epic as JSON")
+    lt.add_argument("--epic", required=True, metavar="KEY")
+
+    fc = sub.add_parser("fetch-confluence", help="Fetch a Confluence page by title and print its text")
+    fc.add_argument("--title", required=True, metavar="TITLE")
+
+    ud = sub.add_parser("update-description", help="Update a ticket's description")
+    ud.add_argument("--ticket", required=True, metavar="KEY")
+    ud.add_argument("--description", metavar="TEXT", help="New description text")
+    ud.add_argument("--description-file", metavar="FILE", help="File containing new description")
+
     sk = sub.add_parser("skip", help="Skip a ticket")
     sk.add_argument("--ticket", required=True, metavar="KEY")
 
@@ -144,6 +202,9 @@ def main() -> int:
     handlers = {
         "next-action": cmd_next_action,
         "process-result": cmd_process_result,
+        "list-tickets": cmd_list_tickets,
+        "update-description": cmd_update_description,
+        "fetch-confluence": cmd_fetch_confluence,
         "skip": cmd_skip,
         "retry": cmd_retry,
         "status": cmd_status,

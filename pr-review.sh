@@ -239,7 +239,7 @@ classify_claude_output() {
     local log_file="$1"
     if grep -q "No unanswered bot comments found" "$log_file" 2>/dev/null; then
         echo "no_qualifying_comments"
-    elif grep -qi "watch complete" "$log_file" 2>/dev/null; then
+    elif grep -qiE "watch(er)? (complete|completed)|all (bot )?comments|all findings|comments? (have been )?addressed|findings (have been )?addressed" "$log_file" 2>/dev/null; then
         echo "comments_addressed"
     else
         echo "error"
@@ -316,10 +316,13 @@ Step 4 — Commit and push: If any fixes were made in steps 1–3, commit them w
 
 classify_lint_output() {
     local log_file="$1"
-    if grep -qi "All checks passed with no fixes needed" "$log_file" 2>/dev/null; then
-        echo "clean"
-    elif grep -qiE "^(Done\.|Commit(ted)?\.|## )" "$log_file" 2>/dev/null; then
+    # Check for commits/pushes first — fixes were made
+    if grep -qiE "^commit\b|pushed to (the )?(remote|branch)|^committed\b" "$log_file" 2>/dev/null \
+       || grep -qiE "^(Done\.|Commit(ted)?\.|## )" "$log_file" 2>/dev/null; then
         echo "fixed"
+    # No fixes needed / already clean
+    elif grep -qiE "all checks (passed|pass) with no (fixes needed|issues)|no fixes (needed|were made|required)|already clean|everything (was already )?clean" "$log_file" 2>/dev/null; then
+        echo "clean"
     else
         echo "error"
     fi
@@ -413,7 +416,7 @@ run_poll() {
         wait "$pid" || { warn "Background process PID $pid exited non-zero"; failed=$(( failed + 1 )); }
     done
 
-    [[ $failed -gt 0 ]] && warn "$failed ticket process(es) reported errors this poll."
+    if [[ $failed -gt 0 ]]; then warn "$failed ticket process(es) reported errors this poll."; fi
 }
 
 run_poll_loop() {

@@ -30,6 +30,7 @@ class JiraConfig:
     email: str
     api_token: str  # resolved from env var
     todo_status: str = "To Do"
+    in_progress_status: str = "In Progress"
     in_review_status: str = "In Review"
     acceptance_criteria_field: Optional[str] = None
 
@@ -121,6 +122,7 @@ def load_config(path: str = "/app/config.yaml") -> Config:
         email=email,
         api_token=api_token,
         todo_status=jira_data.get("todo_status", "To Do"),
+        in_progress_status=jira_data.get("in_progress_status", "In Progress"),
         in_review_status=jira_data.get("in_review_status", "In Review"),
         acceptance_criteria_field=jira_data.get("acceptance_criteria_field") or None,
     )

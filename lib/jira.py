@@ -1,4 +1,5 @@
 import logging
+import re
 import sys
 import time
 from typing import Optional
@@ -20,6 +21,7 @@ class JiraClient:
         self._base_url = config.jira.base_url
         self._auth = HTTPBasicAuth(config.jira.email, config.jira.api_token)
         self._todo_status = config.jira.todo_status
+        self._in_progress_status = config.jira.in_progress_status
         self._in_review_status = config.jira.in_review_status
         self._ac_field = config.jira.acceptance_criteria_field
         self._session = requests.Session()
@@ -31,9 +33,20 @@ class JiraClient:
     # ------------------------------------------------------------------
 
     def get_epic_subtasks(self, epic_key: str) -> list[dict]:
-        """Return a list of sub-ticket dicts for the epic, filtered to todo_status."""
+        """Return sub-ticket dicts for the epic with todo_status or in_progress_status."""
         tickets = self._fetch_subtasks(epic_key)
-        return [t for t in tickets if t["status"] == self._todo_status]
+        return [t for t in tickets if t["status"] in (self._todo_status, self._in_progress_status)]
+
+    def get_all_epic_tickets(self, epic_key: str) -> list[dict]:
+        """Return all sub-ticket dicts for the epic (all statuses)."""
+        return self._fetch_subtasks(epic_key)
+
+    def update_description(self, ticket_key: str, new_description: str) -> bool:
+        """Update the description of a ticket. Returns True on success."""
+        url = f"{self._base_url}/rest/api/3/issue/{ticket_key}"
+        body = {"fields": {"description": _text_to_adf(new_description)}}
+        result = self._request_with_retry("PUT", url, json=body, fatal=False)
+        return result is not None
 
     def get_ticket(self, ticket_key: str) -> dict:
         """Return a dict with summary, description, acceptance_criteria, status."""
@@ -55,6 +68,19 @@ class JiraClient:
             "acceptance_criteria": ac,
             "status": fields_data.get("status", {}).get("name", ""),
         }
+
+    def fetch_confluence_page(self, title: str) -> Optional[str]:
+        """Fetch a Confluence page by title. Returns plain text content or None."""
+        url = f"{self._base_url}/wiki/rest/api/content"
+        params = {"title": title, "type": "page", "expand": "body.view", "limit": 1}
+        data = self._request_with_retry("GET", url, params=params, fatal=False)
+        if data is None:
+            return None
+        results = data.get("results", [])
+        if not results:
+            return None
+        html = results[0].get("body", {}).get("view", {}).get("value", "")
+        return _html_to_text(html)
 
     def transition_ticket(self, ticket_key: str, target_status: str) -> bool:
         """Transition a ticket to the target status. Returns True on success."""
@@ -167,6 +193,41 @@ class JiraClient:
             # Atlassian Document Format
             return _adf_to_text(field_value)
         return str(field_value)
+
+
+def _text_to_adf(text: str) -> dict:
+    """Convert plain text to Atlassian Document Format."""
+    content = []
+    for block in text.strip().split("\n\n"):
+        block = block.strip()
+        if not block:
+            continue
+        lines = block.split("\n")
+        para_nodes: list = []
+        for i, line in enumerate(lines):
+            if line:
+                para_nodes.append({"type": "text", "text": line})
+            if i < len(lines) - 1:
+                para_nodes.append({"type": "hardBreak"})
+        if para_nodes:
+            content.append({"type": "paragraph", "content": para_nodes})
+    if not content:
+        content = [{"type": "paragraph", "content": [{"type": "text", "text": ""}]}]
+    return {"type": "doc", "version": 1, "content": content}
+
+
+def _html_to_text(html: str) -> str:
+    """Convert HTML to plain text by stripping tags."""
+    html = re.sub(r'<br\s*/?>', '\n', html, flags=re.IGNORECASE)
+    html = re.sub(r'</(?:p|div|h[1-6]|li|tr|td|th)>', '\n', html, flags=re.IGNORECASE)
+    html = re.sub(r'<[^>]+>', '', html)
+    html = re.sub(r'&nbsp;', ' ', html)
+    html = re.sub(r'&amp;', '&', html)
+    html = re.sub(r'&lt;', '<', html)
+    html = re.sub(r'&gt;', '>', html)
+    html = re.sub(r'&quot;', '"', html)
+    html = re.sub(r'\n{3,}', '\n\n', html)
+    return html.strip()
 
 
 def _adf_to_text(node: dict) -> str:

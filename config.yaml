@@ -6,20 +6,21 @@ jira:
   base_url: "https://justpark.atlassian.net"
   email: "andy.beak@justpark.com"
   api_token_env: "JIRA_API_TOKEN"        # Name of env var holding the token
-  todo_status: "In Progress"               # Status name for unstarted tickets
-  in_review_status: "In Review"           # Status name to transition to after PR
+  todo_status: "To Do"                     # Status name for unstarted tickets
+  in_progress_status: "Start Ticket"      # Transition name to use when work starts
+  in_review_status: "Code Review"         # Transition name to use after PR is created
   acceptance_criteria_field: null         # Jira custom field ID, e.g. "customfield_10100"
 
 # Git
 git:
-  repo_dir: "/home/andy/projects/go"      # Absolute path to the target git repository.
+  repo_dir: "/home/andy/projects/justpark"      # Absolute path to the target git repository.
                                           # Can also be passed as --repo on the command line,
                                           # or the script will use the current directory.
-  base_branch: "master"
+  base_branch: "develop"
   worktree_root: "/home/andy/projects/worktrees"             # Where worktrees are created (absolute path on host)
   branch_pattern: "{ticket_key}"          # Can include {summary_slug}
   commit_message_pattern: "{ticket_key}: {ticket_summary}"
-  git_crypt_key: "~/gc-keys/go.key"        # Absolute path to git-crypt key file, e.g. ~/gc-keys/repo.key
+  git_crypt_key: "~/gc-keys/jp.key"        # Absolute path to git-crypt key file, e.g. ~/gc-keys/repo.key
                                            # Required if the repo uses git-crypt.
 
 # Agent

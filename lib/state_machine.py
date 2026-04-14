@@ -328,6 +328,7 @@ class StateMachine:
         ticket["code_iteration"] = 1
         self._state["phase"] = "code_loop"
         self._save_state()
+        self._do_jira_start(ticket_key)
         return self._handle_code_loop()
 
     def _process_code_loop_result(self, log_file, ticket_key) -> Action:
@@ -548,6 +549,16 @@ class StateMachine:
         client = JiraClient(self._config)
         ok = client.transition_ticket(ticket_key, self._config.jira.in_review_status)
         return ok
+
+    def _do_jira_start(self, ticket_key: str) -> None:
+        """Transition ticket to in_progress_status (non-fatal). Logs a warning on failure."""
+        client = JiraClient(self._config)
+        ok = client.transition_ticket(ticket_key, self._config.jira.in_progress_status)
+        if not ok:
+            logger.warning(
+                "Could not transition %s to '%s' (non-fatal — ticket may already be In Progress)",
+                ticket_key, self._config.jira.in_progress_status,
+            )
 
     def _reset_memory(self, epic_key: str) -> None:
         memory_path = self._state.get("memory_file", "/app/MEMORY.md")
